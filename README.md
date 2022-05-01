@@ -7,5 +7,5 @@ do odczytu przedmiotów została wykorzystana funkcja textToItem() - https://gis
 <br /><br /><br />
 przykład:
 ```
-1 of diamond <and> name:&8✦ &5Magiczny diament <and> lore:&6To jest magiczny diament<,> który pozwala otwierać przejścia!||&6Kowal pomoże ci go ulepszyć! <and> enchant:unbreaking 1 and fortune 3
+1 of diamond <and> name:&8✦ &5Magiczny diament <and> lore:&6To jest magiczny diament<,> który pozwala otwierać przejścia!||&6Kowal pomoże ci go ulepszyć! <and> enchant:unbreaking 1 + fortune 3
 ```
