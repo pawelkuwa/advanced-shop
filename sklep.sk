@@ -1,0 +1,265 @@
+function textToItem(item: text) :: itemtype:
+    set {_list::*} to split {_item} at " <and> "
+    set {_return} to "%{_list::1}%" parsed as itemtype
+    loop 3 times:
+        if {_list::%loop-value +1%} contains "name:":
+            set {_n} to {_list::%loop-value +1%}
+            replace all "name:" with "" in {_n}
+            set name of {_return} to coloured "%{_n}%"
+        if {_list::%loop-value +1%} contains "lore:":
+            set {_l} to "%{_list::%loop-value +1%}%"
+            replace all "lore:" with "" in {_l}
+            set {_l::*} to split {_l} at "||"
+            loop {_l::*}:
+                set {_lore} to coloured loop-value-2
+                replace all "<,>" with "," in {_lore}
+                add {_lore} to {_return}'s lore
+        if {_list::%loop-value +1%} contains "enchant:":
+            set {_e} to "%{_list::%loop-value +1%}%"
+            replace all "enchant:" with "" in {_e}
+            set {_e::*} to split {_e} at " + "
+            loop {_e::*}:
+                enchant {_return} with "%loop-value-2%" parsed as enchantment type
+    return {_return}
+
+function itemToText(i: itemtype) :: text:
+    set {_number::*} to split "%{_i}%" at " "
+    if {_number::1} parsed as number is number:
+        set {_item} to "%{_number::1}% of %type of {_i}%"
+    else:
+        set {_item} to "%type of {_i}%"
+    set {_item::*} to split {_item} at " and "
+    if name of {_i} is set:
+        add "name:%coloured name of {_i}%" to {_item::*}
+    if lore of {_i} is set:
+        loop lore of {_i}:
+            set {_iii} to coloured loop-value
+            replace all "," with "<,>" in {_iii}
+            add {_iii} to {_lore::*}
+        set {_lore} to "%{_lore::*}%"
+        replace all " and " and ", " with "||" in {_lore}
+        add "lore:%{_lore}%" to {_item::*}
+    if enchantments of {_i} is set:
+        set {_e::*} to enchantments of {_i}
+        set {_e} to "%{_e::*}%"
+        replace all " and " with " + " in {_e}
+        add "enchant:%{_e}%" to {_item::*}
+    set {_return} to "%{_item::*}%"
+    replace all ", " and " and " with " <and> " in {_return}
+    return {_return}
+
+function reloadShopConfig():
+    #config.yml
+    set {_st} to unix timestamp of now
+    load yaml "plugins/sklep/config.yml" as "sklep.config"
+    loop all yaml node from "sklep.config":
+        set {sklep::config::%loop-value%} to yaml value loop-value from "sklep.config"
+    unload yaml "sklep.config"
+    set {_ft} to unix timestamp of now
+    remove {_st} from {_ft}
+    send "[SKLEP] Przeładowano plik konfiguracyjny w %{_ft}%ms! (config.yml)" to console
+    #buy.yml
+    set {_st} to unix timestamp of now
+    load yaml "plugins/sklep/buy.yml" as "sklep.buy"
+    clear {sklep::buy-shop::amount}
+    loop yaml node keys "buy" from "sklep.buy":
+        set {_i} to yaml value "buy.%loop-value%.itemtype" from "sklep.buy"
+        set {sklep::buy-shop::%loop-value%::itemtype} to textToItem({_i})
+        set {sklep::buy-shop::%loop-value%::guiName} to yaml value "buy.%loop-value%.guiName" from "sklep.buy"
+        set {sklep::buy-shop::%loop-value%::price} to yaml value "buy.%loop-value%.price" from "sklep.buy"
+        add 1 to {sklep::buy-shop::amount}
+    unload yaml "sklep.buy"
+    set {shop::buy-shop::maxPage} to rounded up {sklep::buy-shop::amount} / 28
+    set {_ft} to unix timestamp of now
+    remove {_st} from {_ft}
+    send "[SKLEP] Przeładowano plik konfiguracyjny w %{_ft}%ms! (buy.yml)" to console
+    #sell.yml
+    set {_st} to unix timestamp of now
+    load yaml "plugins/sklep/sell.yml" as "sklep.sell"
+    clear {sklep::sell-shop::amount}
+    loop yaml node keys "sell" from "sklep.sell":
+        set {_i} to yaml value "sell.%loop-value%.itemtype" from "sklep.sell"
+        set {sklep::sell-shop::%loop-value%::itemtype} to textToItem({_i})
+        set {sklep::sell-shop::%loop-value%::guiName} to yaml value "sell.%loop-value%.guiName" from "sklep.sell"
+        set {sklep::sell-shop::%loop-value%::price} to yaml value "sell.%loop-value%.price" from "sklep.sell"
+        add 1 to {sklep::sell-shop::amount}
+    unload yaml "sklep.sell"
+    set {shop::sell-shop::maxPage} to rounded up {sklep::sell-shop::amount} / 28
+    set {_ft} to unix timestamp of now
+    remove {_st} from {_ft}
+    send "[SKLEP] Przeładowano plik konfiguracyjny w %{_ft}%ms! (sell.yml)" to console
+
+on load:
+    if yaml file "plugins/sklep/config.yml" doesn't exist:
+        load yaml "plugins/sklep/config.yml" as "sklep.config"
+        set yaml value "main-shop-gui-name" from "sklep.config" to "&8✦ &eSklep"
+        set yaml value "fill-main-shop-with-glass-pane" from "sklep.config" to true
+        set yaml value "buy-shop-gui-name" from "sklep.config" to "&8✦ &aKup przedmioty"
+        set yaml value "balance-gui-name" from "sklep.config" to "&8✦ &7Stan konta: &e{BALANCE}"
+        set yaml value "sell-shop-gui-name" from "sklep.config" to "&8✦ &cSprzedaj przedmioty"
+        set yaml value "fill-buy-shop-with-glass-pane" from "sklep.config" to true
+        set yaml value "fill-sell-shop-with-glass-pane" from "sklep.config" to true
+        set yaml value "back-button-in-buy-shop" from "sklep.config" to true
+        set yaml value "back-button-in-sell-shop" from "sklep.config" to true
+        set yaml value "back-button-gui-name" from "sklep.config" to "&8✦ &cWróć"
+        set yaml value "vault-format" from "sklep.config" to "$"
+        save yaml "sklep.config"
+        unload yaml "sklep.config"
+    if yaml file "plugins/sklep/buy.yml" doesn't exist:
+        load yaml "plugins/sklep/buy.yml" as "sklep.buy"
+        set yaml value "buy.1.itemtype" from "sklep.buy" to "1 of diamond"
+        set yaml value "buy.1.guiName" from "sklep.buy" to "&8✦ &b1 diament"
+        set yaml value "buy.1.price" from "sklep.buy" to 1
+        save yaml "sklep.buy"
+        unload yaml "sklep.buy"
+    if yaml file "plugins/sklep/sell.yml" doesn't exist:
+        load yaml "plugins/sklep/sell.yml" as "sklep.sell"
+        set yaml value "sell.1.itemtype" from "sklep.sell" to "1 of emerald"
+        set yaml value "sell.1.guiName" from "sklep.sell" to "&8✦ &a1 emerald"
+        set yaml value "sell.1.price" from "sklep.sell" to 5
+        save yaml "sklep.sell"
+        unload yaml "sklep.sell"        
+    reloadShopConfig()
+
+function getShopPage(p: player) :: number:
+    set {_page} to uncoloured name of slot 53 of {_p}'s current inventory
+    replace all "✦ Strona: " with "" in {_page}
+    set {_page} to {_page} parsed as number
+    return {_page}
+
+function openShopGui(p: player, t: text, chest: boolean, page: number):
+    if {_chest} is true:
+        set {_r} to 3
+        if {_t} is not "main-shop":
+            set {_r} to 6
+        open chest inventory with {_r} rows named {sklep::config::%{_t}%-gui-name} to {_p}
+    if {sklep::config::fill-%{_t}%-with-glass-pane} is true:
+        set slot (integers between 0 and 26) of {_p}'s current inventory to black glass pane named " "
+    else:
+        set slot (integers between 0 and 26) of {_p}'s current inventory to air
+    if {_t} is "main-shop":
+        set slot 10 of {_p}'s current inventory to green clay named {sklep::config::buy-shop-gui-name}
+        set {_balance} to {sklep::config::balance-gui-name}
+        replace all "{BALANCE}" with "%{_p}'s money%" in {_balance}
+        set slot 13 of {_p}'s current inventory to nether star named {_balance}
+        set slot 16 of {_p}'s current inventory to red clay named {sklep::config::sell-shop-gui-name}
+    else:
+        if {sklep::config::fill-%{_t}%-with-glass-pane} is true:
+            set slot (integers between 0 and 53) of {_p}'s current inventory to black glass pane named " "
+        else:
+            set slot (integers between 0 and 53) of {_p}'s current inventory to air
+        if {sklep::config::back-button-in-%{_t}%} is true:
+            set slot 49 of {_p}'s current inventory to barrier named {sklep::config::back-button-gui-name}
+        set {_max} to 28 * {_page}
+        set {_min} to 28 * {_page} -27
+        if {_page} is 1:
+            set slot 48 of {_p}'s current inventory to arrow named "&8✦ &cBrak poprzedniej strony!"
+        else:
+            set slot 48 of {_p}'s current inventory to arrow named "&8✦ &aPoprzednia strona!"
+        if {sklep::%{_t}%::amount} > {_max}:
+            set slot 50 of {_p}'s current inventory to arrow named "&8✦ &aNastępna strona!"
+        else:
+            set slot 50 of {_p}'s current inventory to arrow named "&8✦ &cBrak poprzedniej strony!"
+        set slot 53 of {_p}'s current inventory to paper named "&8✦ &6Strona: &e%{_page}%"
+        set {_slot} to 10
+        loop {sklep::%{_t}%::amount} times:
+            if loop-value is between {_min} and {_max}:
+                set slot {_slot} of {_p}'s current inventory to {sklep::%{_t}%::%loop-value%::itemtype} named {sklep::%{_t}%::%loop-value%::guiName}
+                add "  &8► &7Cena: &e%{sklep::%{_t}%::%loop-value%::price}%%{sklep::config::vault-format}%" and "  &8► &7ID: &e##%loop-value%" to slot {_slot} of {_p}'s current inventory's lore
+                add 1 to {_slot}
+                if {_slot} is 17:
+                    add 2 to {_slot}
+                else if {_slot} is 26:
+                    add 2 to {_slot}
+                else if {_slot} is 35:
+                    add 2 to {_slot}
+                else if {_slot} is 44:
+                    add 2 to {_slot}
+
+
+command /sklep [<text>]:
+    trigger:
+        openShopGui(player, "main-shop", true, 0)
+
+on inventory click:
+    if name of player's current inventory is {sklep::config::main-shop-gui-name}:
+        if clicked inventory is not player's inventory:
+            cancel event
+            if clicked slot is 10:
+                close player's inventory
+                openShopGui(player, "buy-shop", true, 1)
+                stop
+            if clicked slot is 16:
+                close player's inventory
+                openShopGui(player, "sell-shop", true, 1)
+                stop
+    if name of player's current inventory is {sklep::config::buy-shop-gui-name}:
+        if clicked inventory is not player's inventory:
+            cancel event
+            if index of clicked slot is between 10 and 43:
+                set {_id} to uncoloured line 2 of lore of clicked slot
+                replace all "  ► ID: ##" with "" in {_id}
+                set {_id} to {_id} parsed as number
+                if {_id} is not number:
+                    stop
+                if player's money < {sklep::buy-shop::%{_id}%::price}:
+                    send "&8✦ &cNie stać Cię na zakup tego przedmiotu!"
+                    stop
+                remove {sklep::buy-shop::%{_id}%::price} from player's money
+                if player can hold {sklep::buy-shop::%{_id}%::itemtype}:
+                    give {sklep::buy-shop::%{_id}%::itemtype} to player
+                else:
+                    drop {sklep::buy-shop::%{_id}%::itemtype} at player
+                send "&8✦ &aZakupiłeś przedmiot za &2%{sklep::buy-shop::%{_id}%::price}%%{sklep::config::vault-format}%&a!"
+                stop
+            if clicked slot is 49:
+                if clicked slot is barrier named {sklep::config::back-button-gui-name}:
+                    close player's inventory
+                    openShopGui(player, "main-shop", true, 0)
+                    stop
+            if clicked slot is 48:
+                if clicked slot is arrow named "&8✦ &aPoprzednia strona!":
+                    set {_page} to getShopPage(player)
+                    remove 1 from {_page}
+                    openShopGui(player, "buy-shop", false, {_page})
+                    stop
+            if clicked slot is 50:
+                if clicked slot is arrow named "&8✦ &aNastępna strona!":
+                    set {_page} to getShopPage(player)
+                    add 1 to {_page}
+                    openShopGui(player, "buy-shop", false, {_page})
+                    stop
+    if name of player's current inventory is {sklep::config::sell-shop-gui-name}:
+        if clicked inventory is not player's inventory:
+            cancel event
+            if index of clicked slot is between 10 and 43:
+                set {_id} to uncoloured line 2 of lore of clicked slot
+                replace all "  ► ID: ##" with "" in {_id}
+                set {_id} to {_id} parsed as number
+                if {_id} is not number:
+                    stop
+                if player doesn't have {sklep::sell-shop::%{_id}%::itemtype}:
+                    send "&8✦ &cNie masz tego przedmiotu!"
+                    stop
+                remove {sklep::sell-shop::%{_id}%::itemtype} from player
+                add {sklep::sell-shop::%{_id}%::price} to player's account
+                send "&8✦ &aSprzedałeś przedmiot!"
+                send "&8✦ &aZa sprzedaż otrzymujesz &2%{sklep::sell-shop::%{_id}%::price}%%{sklep::config::vault-format}%&a!"
+                stop
+            if clicked slot is 49:
+                if clicked slot is barrier named {sklep::config::back-button-gui-name}:
+                    close player's inventory
+                    openShopGui(player, "main-shop", true, 0)
+                    stop
+            if clicked slot is 48:
+                if clicked slot is arrow named "&8✦ &aPoprzednia strona!":
+                    set {_page} to getShopPage(player)
+                    remove 1 from {_page}
+                    openShopGui(player, "sell-shop", false, {_page})
+                    stop
+            if clicked slot is 50:
+                if clicked slot is arrow named "&8✦ &aNastępna strona!":
+                    set {_page} to getShopPage(player)
+                    add 1 to {_page}
+                    openShopGui(player, "sell-shop", false, {_page})
+                    stop
